@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 const typeDefs = `
   type Message {
     id: ID!
-    user: String!
+    user: User!
     text: String!
   }
   type User {
@@ -17,7 +17,6 @@ const typeDefs = `
   type Query {
     messages: [Message!]
     user(name:String!): User
-    users: [User!]
   }
   type Mutation {
     createUser(name: String!):ID
@@ -28,7 +27,7 @@ const typeDefs = `
   }
 `;
 
-const messages = [];
+let messages = [];
 const subscribers = [];
 const onMessagesUpdates = (fn) => subscribers.push(fn);
 
@@ -36,7 +35,6 @@ const onMessagesUpdates = (fn) => subscribers.push(fn);
 const resolvers = {
   Query: {
     messages: async () => await prisma.message.findMany(), //returns messages
-    users: async () => await prisma.user.findMany(),
     user: async (parent, { name }) =>
       await prisma.user.findFirst({ where: { name } }),
   },
@@ -75,7 +73,11 @@ const resolvers = {
   },
   Subscription: {
     messages: {
-      subscribe: (parent, args, { pubsub }) => {
+      subscribe: async (parent, args, { pubsub }) => {
+        const msg = await prisma.message.findMany({
+          select: { id: true, text: true, user: { select: { name: true } } },
+        });
+        messages = [...msg];
         const channel = Math.random().toString(36).slice(2, 15);
         onMessagesUpdates(() => pubsub.publish(channel, { messages }));
         setTimeout(() => pubsub.publish(channel, { messages }), 0);
